@@ -94,8 +94,7 @@ See Issue [#10](https://github.com/Huguet57/LIMO-Velo/issues/10) to see other sa
 # TODO list
 ### Urgent fixes
 - [ ] Rethink ``mapping_offline`` (see Discussions)
-- [ ] Adding Livox as a LiDAR type
-- [ ] Rewrite the most confusing parts according to [qpc001's feedback](https://github.com/qpc001/LIMO-Velo/commit/a45b6489cbbcefc68515565eeaeaed267c976da8). (thank you!)
+- [ ] Investigate why Livox underdelivers compared to Fast-LIO2.
 
 ### Design choices
 - [ ] Renew Buffer private structure. Interesting answer in StackOverflow: [https://stackoverflow.com/a/67236232](https://stackoverflow.com/a/67236232)
