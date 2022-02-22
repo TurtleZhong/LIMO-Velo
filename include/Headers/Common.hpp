@@ -3,8 +3,12 @@
 // Libraries
 #include <ros/ros.h>
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <math.h>
 #include <chrono>
+#include <filesystem>
+#include <thread>
 // Data Structures
 #include <deque>
 #include <vector>
@@ -93,6 +97,11 @@ struct Params {
     double cov_bias_acc;
     double cov_bias_gyro;
     double LiDAR_noise;
+
+    std::string map_name;
+    std::string maps_path;
+    std::string loadsave_action;
+    std::filesystem::path map_fullpath;
 
     std::string points_topic;
     std::string imus_topic;

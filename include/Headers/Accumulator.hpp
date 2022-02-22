@@ -20,6 +20,7 @@ class Accumulator {
             void clear_buffers();
             void clear_buffers(TimeType);
             void clear_lidar(TimeType);
+            void clear_states();
 
         // Get content given time intervals
 
@@ -48,6 +49,7 @@ class Accumulator {
         // Time management
         
             double update_delta(const HeuristicParams&, double t);
+            void set_initial_time(double t);
             double latest_time();
 
     private:

@@ -53,3 +53,9 @@ Heuristic:
     # With heuristic
     times: [0.5, 1.0, 1.25]
     deltas: [0.1, 0.05, 0.02]
+
+# Load/Save map
+loadsave:
+     map_name: "forum"   # "montmelo-IN2" / "forum"
+     maps_path: "/media/andreu/Movies/ws_limovelo/maps"
+     action: none   # OPTIONS: save / load / none

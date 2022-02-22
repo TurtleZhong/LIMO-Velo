@@ -54,7 +54,13 @@ class Point {
         float intensity;
         float range;
 
-        Point() {}
+        Point() : Point(0.,0.,0.) {}
+
+        Point(float x, float y, float z) {
+            this->x = x;
+            this->y = y;
+            this->z = z;
+        }
 
         Point(const full_info::Point& p) {
             this->set_XYZ(p);

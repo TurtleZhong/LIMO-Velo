@@ -49,6 +49,14 @@ int main(int argc, char** argv) {
     
     ros::Rate rate(5000);
 
+    // Check if there's a map to load
+    bool LOAD_MAP = Config.loadsave_action == "load";
+    if (LOAD_MAP and not map.exists()) map.load(Config.map_fullpath);
+    bool has_to_prelocalize = LOAD_MAP;
+
+    int preloc_counter = 0;
+    srand (static_cast <unsigned> (time(0)));
+
     while (ros::ok()) {
         
         // The accumulator received enough data to start
@@ -70,10 +78,107 @@ int main(int argc, char** argv) {
                 // Check if interval has enough field of view
                 if (t2 - t1 < delta - 1e-6) break;
 
+            // Step 0.1 PRE-LOCALIZATION
+            /*
+                if (LOAD_MAP and loc.last_time_integrated < 0) {
+                    bool pre_localizated = false;
+                    int NUM_ITERS_PRELOCALIZATION = 20;
+                    
+                    float LO = -3.f;
+                    float HI = +3.f;
+                    float random_x = LO + static_cast <float> (std::rand()) /( static_cast <float> (RAND_MAX/(HI-LO)));
+                    float random_y = LO + static_cast <float> (std::rand()) /( static_cast <float> (RAND_MAX/(HI-LO)));
+                    
+                    float LO_yaw = -30.f*M_PI/180.f;
+                    float HI_yaw = +30.f*M_PI/180.f;
+                    float random_yaw = LO_yaw + static_cast <float> (std::rand()) /( static_cast <float> (RAND_MAX/(HI_yaw-LO_yaw)));
+                    Eigen::AngleAxisf rollAngle(0, Eigen::Vector3f::UnitZ());
+                    Eigen::AngleAxisf yawAngle(random_yaw, Eigen::Vector3f::UnitY());
+                    Eigen::AngleAxisf pitchAngle(0, Eigen::Vector3f::UnitX());
+                    Eigen::Quaternion<float> random_q = rollAngle * yawAngle * pitchAngle;
+
+                    // Reset localizator and initial time
+                    loc.reset(NUM_ITERS_PRELOCALIZATION, Eigen::Vector3f(random_x, random_y, 0.), random_q.matrix());
+                    accum.set_initial_time(t2);
+
+                    std::cout << "random_yaw: " << random_yaw << std::endl;
+
+                    // Publish as map the surroundings of the origin
+                    Point origin;
+                    Points surroundings = map.radius_search(origin, 100);
+                    Points ds_surroundings; for (int i = 0; i < surroundings.size(); ++i) if (i%10 == 0) ds_surroundings.push_back(surroundings[i]);
+                    publish.pointcloud(ds_surroundings, false);
+
+                    std::cout << "Prelocalizing..." << std::endl;
+
+                    // Human estimation of where we are
+                    State pre_estimate = loc.latest_state();
+                    pre_estimate.time = t2 - Config.full_rotation_time;
+
+                    // Add estimation to buffer
+                    accum.add(pre_estimate, t2 - Config.full_rotation_time);
+
+                    // Compensated pointcloud given a path
+                    Points compensated = comp.compensate(t2 - Config.full_rotation_time, t2);
+                    Points ds_compensated = comp.downsample(compensated);
+                    if (ds_compensated.size() < Config.MAX_POINTS2MATCH) break; 
+
+                    // Localize points in map
+                    loc.localize(ds_compensated, t2);
+                    State Xt2 = loc.latest_state();
+                    publish.state(Xt2, false);
+                    publish.tf(Xt2);
+
+                    // Publish pointcloud used to localize
+                    Points global_compensated = Xt2 * Xt2.I_Rt_L() * ds_compensated;
+                    publish.pointcloud(global_compensated, true);
+
+                    // Clear buffers
+                    accum.clear_buffers(t2);
+                    accum.clear_states();
+
+                    // Check if converged
+                    Matches matches = map.match(Xt2, ds_compensated);
+                    double matches_error = 0;
+                    for (Match m : matches) matches_error += std::abs(m.distance);
+                    std::cout << "matches_error: " << matches_error << " / matches size: " << matches.size() << " = " << matches_error/((double) matches.size()) << std::endl;
+                    pre_localizated = std::abs(matches_error/((double) matches.size())) < 0.1; // ++preloc_counter > 5;
+
+                    // Not a good fit, repeat pre-localization
+                    if (not pre_localizated) break;
+                    // A good fit, perform algorithm
+                    else {
+                        std::cout << "LOCALIZED! " << std::setprecision(16) << t2 << std::endl;
+                        std::cout << Xt2.pos.transpose() << std::endl;
+                        loc.reset(Config.MAX_NUM_ITERS, Xt2.pos, Xt2.R);
+                        accum.add(Xt2, t2);
+                    }
+                }
+            */
+
             // Step 1. LOCALIZATION
 
-                // Integrate IMUs up to t2
-                loc.propagate_to(t2);
+                // Reset with sampled pre-estimate
+                if (has_to_prelocalize) {
+                    int NUM_ITERS_PRELOCALIZATION = 20;
+
+                    // Sample random initial pose and orientation
+                    // TODO
+
+                    // Reset localizator and initial time
+                    loc.reset(NUM_ITERS_PRELOCALIZATION); // , Eigen::Vector3f(random_x, random_y, 0.), random_q.matrix());
+                    accum.set_initial_time(t2);
+
+                    // Human estimation of where we are
+                    State pre_estimate = loc.latest_state();
+                    pre_estimate.time = t2 - Config.full_rotation_time;
+
+                    // Add estimation to buffer
+                    accum.add(pre_estimate, t2 - Config.full_rotation_time);
+                } else {
+                    // Integrate IMUs up to t2
+                    loc.propagate_to(t2);
+                }
 
                 // Compensated pointcloud given a path
                 Points compensated = comp.compensate(t1, t2);
@@ -91,17 +196,44 @@ int main(int argc, char** argv) {
                 Points global_compensated = Xt2 * Xt2.I_Rt_L() * ds_compensated;
                 publish.pointcloud(global_compensated, true);
 
+                // Check if has to prelocalize again + reset
+                if (has_to_prelocalize) {
+                    // Clear buffers
+                    accum.clear_buffers(t2);
+                    accum.clear_states();
+
+                    // Check if converged
+                    Matches matches = map.match(Xt2, ds_compensated);
+                    double matches_error = 0;
+                    for (Match m : matches) matches_error += std::abs(m.distance);
+                    std::cout << "matches_error: " << matches_error << " / matches size: " << matches.size() << " = " << matches_error/((double) matches.size()) << std::endl;
+                    bool pre_localizated = std::abs(matches_error/((double) matches.size())) < 0.1;
+
+                    // Not a good fit, repeat pre-localization
+                    if (not pre_localizated) break;
+                    // A good fit, perform algorithm
+                    else {
+                        std::cout << "LOCALIZED! " << std::setprecision(16) << t2 << std::endl;
+                        std::cout << Xt2.pos.transpose() << std::endl;
+                        
+                        has_to_prelocalize = false;
+                        loc.reset(Config.MAX_NUM_ITERS, Xt2.pos, Xt2.R);
+                        accum.add(Xt2, t2);
+                        break;
+                    }
+                }
+
             // Step 2. MAPPING
 
                 // Add updated points to map (mapping online)
-                if (Config.mapping_online) {
+                if (Config.mapping_online and not map.frozen) {
                     map.add(global_compensated, t2, true);
                     publish.pointcloud(global_compensated, false);
                     
                     if (Config.print_extrinsics) publish.extrinsics(Xt2);
                 }
                 // Add updated points to map (mapping offline)
-                else if (map.hasToMap(t2)) {
+                else if (map.hasToMap(t2) and not map.frozen) {
                     State Xt2 = loc.latest_state();
                     // Map points at [t2 - FULL_ROTATION_TIME, t2]
                     Points full_compensated = comp.compensate(t2 - Config.full_rotation_time, t2);
@@ -115,7 +247,22 @@ int main(int argc, char** argv) {
                     publish.pointcloud(global_full_ds_compensated, false);
                 }
 
-            // Step 3. ERASE OLD DATA
+            // Step 3. LOOP CLOSURE
+
+                if (not map.frozen and loc.is_loop_closed(t2)) {
+                    // Freeze the map, don't let new points in
+                    map.freeze();
+                    ROS_INFO("Loop closed, map freezed.");
+
+                    // Check if we can save the map to file
+                    if (Config.loadsave_action == "save") {
+                        ROS_INFO("Saving map...");
+                        std::thread save_thread(&Mapper::save, &map, Config.map_fullpath);
+                        save_thread.detach();
+                    }
+                }
+
+            // Step 4. ERASE OLD DATA
 
                 // Empty too old LiDAR points
                 accum.clear_lidar(t2 - Config.empty_lidar_time);
@@ -168,4 +315,10 @@ void fill_config(ros::NodeHandle& nh) {
     nh.param<std::vector<float>>("initial_gravity", Config.initial_gravity, {0.0, 0.0, -9.807});
     nh.param<std::vector<float>>("I_Translation_L", Config.I_Translation_L, std::vector<float> (3, 0.));
     nh.param<std::vector<float>>("I_Rotation_L", Config.I_Rotation_L, std::vector<float> (9, 0.));
+    nh.param<std::string>("loadsave/map_name", Config.map_name, "newest");
+    nh.param<std::string>("loadsave/maps_path", Config.maps_path, "/path/to/maps");
+    nh.param<std::string>("loadsave/action", Config.loadsave_action, "none");
+
+    // Combination of variables
+    Config.map_fullpath = std::filesystem::path(Config.maps_path) / std::filesystem::path(Config.map_name + ".map");
 }

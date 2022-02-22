@@ -16,7 +16,11 @@ extern struct Params Config;
 // class Localizator
     // public:
         Localizator::Localizator() {
-            this->init_IKFoM();
+            this->reset();
+        }
+
+        void Localizator::reset(int NUM_ITERS, Eigen::Vector3f initial_pos, Eigen::Matrix3f initial_R) {
+            this->init_IKFoM(NUM_ITERS, initial_pos, initial_R);
         }
 
         // Given points, find new position
@@ -74,9 +78,9 @@ extern struct Params Config;
         }
 
         State Localizator::latest_state() {
-            // If no updates, return empty state
+            // If no updates, return initial state
             if (this->last_time_updated < 0)
-                return State (this->last_time_integrated);
+                return State (this->get_x(), this->last_time_integrated);
 
             return State(
                 this->get_x(),
@@ -85,13 +89,24 @@ extern struct Params Config;
             );
         }
 
+        bool Localizator::is_loop_closed(double t) {
+            // Requirements
+            bool is_close_to_origin = this->around_origin(t);
+            bool has_left_origin_once = this->enough_trajectory(t);
+
+            return is_close_to_origin and has_left_origin_once;
+        }
+
     // private:
         Localizator& Localizator::getInstance() {
             static Localizator* localizator = new Localizator();
             return *localizator;
         }
 
-        void Localizator::init_IKFoM() {
+        void Localizator::init_IKFoM(int NUM_ITERS, Eigen::Vector3f initial_pos, Eigen::Matrix3f initial_R) {
+            // Default number of iterations
+            if (NUM_ITERS < 0) NUM_ITERS = Config.MAX_NUM_ITERS;
+            
             // Initialize IKFoM
             this->IKFoM_KF.init_dyn_share(
                 // TODO: change to private functions instead of "IKFoM::"
@@ -100,12 +115,12 @@ extern struct Params Config;
                 IKFoM::df_dw,
                 IKFoM::h_share_model,
 
-                Config.MAX_NUM_ITERS,
+                NUM_ITERS,
                 Config.LIMITS
             );
 
             // Initialize state
-            this->init_IKFoM_state();
+            this->init_IKFoM_state(initial_pos, initial_R);
         }
 
         void Localizator::IKFoM_update(const Points& points) {
@@ -114,8 +129,12 @@ extern struct Params Config;
             this->IKFoM_KF.update_iterated_dyn_share_modified(Config.LiDAR_noise, Config.degeneracy_threshold, solve_H_time, Config.print_degeneracy_values);
         }
 
-        void Localizator::init_IKFoM_state() {
+        void Localizator::init_IKFoM_state(const Eigen::Vector3f& initial_pos, const Eigen::Matrix3f& initial_R) {
             state_ikfom init_state = this->IKFoM_KF.get_x();
+            // .pos (Vect3) to initial
+            init_state.pos = initial_pos.cast<double>();
+            // .rot (SO3) to initial
+            init_state.rot = SO3(initial_R.cast<double>());
             init_state.grav = S2(-Eigen::Vector3f (Config.initial_gravity.data()).cast<double>());
             init_state.bg = Eigen::Vector3d::Zero();
             init_state.offset_R_L_I = SO3(Eigen::Map<Eigen::Matrix3f>(Config.I_Rotation_L.data(), 3, 3).cast<double>());
@@ -151,4 +170,23 @@ extern struct Params Config;
             double dt = imu.time - this->last_time_integrated;
 
             this->IKFoM_KF.predict(dt, Q, in);
+        }
+
+        bool Localizator::enough_trajectory(double t) {
+            Accumulator& accum = Accumulator::getInstance();
+            States Xs = accum.get_states(accum.initial_time, t);
+            float total_meters = 0.;
+
+            for (int i = 0; i < Xs.size()-1; ++i) {
+                Eigen::Vector3f dpos = Xs[i+1].pos - Xs[i].pos;
+                total_meters += dpos.norm();
+            }
+
+            return total_meters > 50;
+        }
+
+        bool Localizator::around_origin(double t) {
+            State X = Accumulator::getInstance().get_prev_state(t);
+            double dist2origin = X.pos.norm();
+            return dist2origin < 10;
         }

@@ -65,6 +65,10 @@ extern struct Params Config;
                 this->BUFFER_L.clear(t);
             }
 
+            void Accumulator::clear_states() {
+                this->BUFFER_X.clear();
+            }
+
         /////////////////////////////////
 
         State Accumulator::get_prev_state(double t) {
@@ -100,6 +104,10 @@ extern struct Params Config;
             }
 
             return this->is_ready = false;
+        }
+
+        void Accumulator::set_initial_time(double t) {
+            this->initial_time = t;
         }
 
         // Check if data stream died
