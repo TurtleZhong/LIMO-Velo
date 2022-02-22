@@ -163,10 +163,29 @@ int main(int argc, char** argv) {
                     int NUM_ITERS_PRELOCALIZATION = 20;
 
                     // Sample random initial pose and orientation
-                    // TODO
+                    float LO = -5.f;
+                    float HI = +5.f;
+                    float random_x = LO + static_cast <float> (std::rand()) /( static_cast <float> (RAND_MAX/(HI-LO)));
+                    float random_y = LO + static_cast <float> (std::rand()) /( static_cast <float> (RAND_MAX/(HI-LO)));
+                    
+                    float LO_yaw = -45.f*M_PI/180.f;
+                    float HI_yaw = +45.f*M_PI/180.f;
+                    float random_yaw = LO_yaw + ((double)++preloc_counter)/40.d*(HI_yaw - LO_yaw);
+                    ROS_INFO("Yaw: %f", random_yaw);
+                    // float random_yaw = LO_yaw + static_cast <float> (std::rand()) /( static_cast <float> (RAND_MAX/(HI_yaw-LO_yaw)));
+                    Eigen::AngleAxisf ZAngle(random_yaw, Eigen::Vector3f::UnitZ());
+                    Eigen::AngleAxisf YAngle(0, Eigen::Vector3f::UnitY());
+                    Eigen::AngleAxisf XAngle(0, Eigen::Vector3f::UnitX());
+                    Eigen::Quaternion<float> random_q = ZAngle * YAngle * XAngle;
+
+                    // Publish as map the surroundings of the origin
+                    Point origin;
+                    Points surroundings = map.radius_search(origin, 100);
+                    Points ds_surroundings; for (int i = 0; i < surroundings.size(); ++i) ds_surroundings.push_back(surroundings[i]);
+                    publish.pointcloud(ds_surroundings, false);
 
                     // Reset localizator and initial time
-                    loc.reset(NUM_ITERS_PRELOCALIZATION); // , Eigen::Vector3f(random_x, random_y, 0.), random_q.matrix());
+                    loc.reset(NUM_ITERS_PRELOCALIZATION, Eigen::Vector3f(random_x, random_y, 0.), random_q.matrix());
                     accum.set_initial_time(t2);
 
                     // Human estimation of where we are

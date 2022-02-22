@@ -1,6 +1,6 @@
 # Online/Offline
 mapping_online: true
-real_time: true
+real_time: false
 
 # Topics
 points_topic: "/velodyne_points"
@@ -46,16 +46,16 @@ print_degeneracy_values: false
 
 # Delta refinement
 Heuristic:
-#     # No heuristic
-#     times: []
-#     deltas: [0.1]
+    # No heuristic
+    times: []
+    deltas: [0.1]
     
-    # With heuristic
-    times: [0.5, 1.0, 1.25]
-    deltas: [0.1, 0.05, 0.02]
+#     # With heuristic
+#     times: [0.5, 1.0, 1.25]
+#     deltas: [0.1, 0.05, 0.02]
 
 # Load/Save map
 loadsave:
      map_name: "forum"   # "montmelo-IN2" / "forum"
      maps_path: "/media/andreu/Movies/ws_limovelo/maps"
-     action: none   # OPTIONS: save / load / none
+     action: load   # OPTIONS: save / load / none
